@@ -1,0 +1,27 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    image: robotics-lab:dev
+    container_name: robotics_dev
+    user: "${UID:-1000}:${GID:-1000}"
+    stdin_open: true
+    tty: true
+    network_mode: host
+    ipc: host
+    environment:
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-31}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ../src:/ws/src:rw
+      - ws_build:/ws/build:rw
+      - ws_install:/ws/install:rw
+
+volumes:
+  ws_build:
+  ws_install:
