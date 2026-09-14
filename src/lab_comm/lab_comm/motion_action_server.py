@@ -1,0 +1,71 @@
+import time
+import rclpy
+from rclpy.node import Node
+from rclpy.action import ActionServer, CancelResponse, GoalResponse
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
+from example_interfaces.action import Fibonacci
+
+class MotionActionServer(Node):
+    def __init__(self):
+        super().__init__('motion_action_server')
+        self._cb_group = ReentrantCallbackGroup()
+        self.srv = ActionServer(
+            self,
+            Fibonacci,
+            'execute_motion',
+            execute_callback=self.execute,
+            goal_callback=self.on_goal,
+            cancel_callback=self.on_cancel,
+            callback_group=self._cb_group
+        )
+        self.get_logger().info('Motion Action Server ready on /execute_motion')
+
+    def on_goal(self, goal_request):
+        if goal_request.order > 25:
+            self.get_logger().warn('Goal rejected: order too large (> 25)')
+            return GoalResponse.REJECT
+        return GoalResponse.ACCEPT
+
+    def on_cancel(self, goal_handle):
+        self.get_logger().info('Goal cancel request accepted')
+        return CancelResponse.ACCEPT
+
+    def execute(self, goal_handle):
+        self.get_logger().info(f'Executing goal order: {goal_handle.request.order}')
+        feedback = Fibonacci.Feedback()
+        feedback.sequence = [0, 1]
+
+        for i in range(1, goal_handle.request.order):
+            if goal_handle.is_cancel_requested:
+                goal_handle.canceled()
+                self.get_logger().info('Goal successfully canceled')
+                result = Fibonacci.Result()
+                result.sequence = feedback.sequence
+                return result
+
+            feedback.sequence.append(feedback.sequence[i] + feedback.sequence[i - 1])
+            goal_handle.publish_feedback(feedback)
+            time.sleep(0.5)
+
+        goal_handle.succeed()
+        result = Fibonacci.Result()
+        result.sequence = feedback.sequence
+        self.get_logger().info('Goal succeeded')
+        return result
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = MotionActionServer()
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+    try:
+        executor.spin()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
